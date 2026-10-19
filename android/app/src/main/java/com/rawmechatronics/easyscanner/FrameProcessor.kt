@@ -1,0 +1,129 @@
+package com.rawmechatronics.easyscanner
+
+import android.media.ImageReader
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
+import android.os.Process
+import android.util.Log
+
+/**
+ * The processing thread. Owns the native engine handle; camera frames,
+ * configuration and commands all run here, in order, so the engine needs no
+ * locks. Results go to the UI through a [TripleBuffer]: the camera never
+ * waits for drawing and drawing never waits for the camera.
+ */
+class FrameProcessor(filesDir: String, private val listener: Listener) : ImageReader.OnImageAvailableListener {
+
+    interface Listener {
+        /** A new result is in [results] (called on the processing thread). */
+        fun onResult(r: FrameResult)
+
+        /** Status lines changed (JSON from the core), on the main thread. */
+        fun onMessages(json: String)
+
+        /** The core wants a photo keyframe now (called on the processing thread). */
+        fun onPhotoDue()
+
+        fun onError(msg: String)
+    }
+
+    private val thread = HandlerThread("es-proc", Process.THREAD_PRIORITY_URGENT_DISPLAY).apply { start() }
+    val handler = Handler(thread.looper)
+    private val main = Handler(Looper.getMainLooper())
+    val results = TripleBuffer { FrameResult() }
+    private var handle = 0L
+
+    init {
+        handler.post {
+            try {
+                handle = NativeLib.nativeCreate(filesDir)
+            } catch (e: RuntimeException) {
+                report("native core failed to start: ${e.message}")
+            }
+        }
+    }
+
+    fun configure(json: String) = handler.post {
+        if (handle == 0L) return@post
+        try {
+            NativeLib.nativeConfigure(handle, json)
+            pullMessages()
+        } catch (e: RuntimeException) {
+            report(e.message ?: "configure failed")
+        }
+    }
+
+    fun command(cmd: Cmd, arg: String? = null, done: (String) -> Unit = {}) = handler.post {
+        if (handle == 0L) return@post
+        val msg = try {
+            NativeLib.nativeCommand(handle, cmd.code, arg)
+        } catch (e: RuntimeException) {
+            e.message ?: "command failed"
+        }
+        pullMessages()
+        main.post { done(msg) }
+    }
+
+    override fun onImageAvailable(reader: ImageReader) {
+        val img = try {
+            reader.acquireLatestImage()
+        } catch (e: IllegalStateException) {
+            null // reader closed by a resolution switch
+        } ?: return
+        try {
+            if (handle == 0L) return
+            val p = img.planes
+            val out = results.writeBuffer()
+            val t0 = System.nanoTime()
+            var n = NativeLib.nativeProcess(
+                handle,
+                p[0].buffer, p[0].rowStride,
+                p[1].buffer, p[2].buffer, p[1].rowStride, p[1].pixelStride,
+                img.width, img.height, img.timestamp, out.data,
+            )
+            out.procMs = (System.nanoTime() - t0) / 1e6
+            if (n < 0) {
+                // the frame was processed but its layers did not fit: grow for next time
+                out.data = FloatArray(-n * 2)
+                n = 0
+            }
+            out.length = n
+            out.timestampNs = img.timestamp
+            if (n == 0) return
+            val ev = out.events()
+            results.publish()
+            if (ev and FrameResult.Ev.PHOTO_DUE != 0) listener.onPhotoDue()
+            listener.onResult(out)
+            if (ev and FrameResult.Ev.MESSAGES != 0) pullMessages()
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "frame failed", e)
+            report(e.message ?: "frame failed")
+        } finally {
+            img.close()
+        }
+    }
+
+    private fun pullMessages() {
+        val json = try {
+            NativeLib.nativeMessages(handle)
+        } catch (e: RuntimeException) {
+            return
+        }
+        main.post { listener.onMessages(json) }
+    }
+
+    private fun report(msg: String) = main.post { listener.onError(msg) }
+
+    fun release() {
+        handler.post {
+            if (handle != 0L) NativeLib.nativeDestroy(handle)
+            handle = 0L
+        }
+        thread.quitSafely()
+    }
+
+    private companion object {
+        const val TAG = "EasyScanner"
+    }
+}

@@ -1,0 +1,24 @@
+# Android / Gradle build artifacts
+*.iml
+.gradle/
+.kotlin/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Rust build output
+core/target/
+
+# Local machine config (SDK path, libclang) — generated per machine
+local.properties
+
+# IDE
+.idea/
+
+# Output binaries
+*.apk
+*.aab
+
+# OS
+.DS_Store

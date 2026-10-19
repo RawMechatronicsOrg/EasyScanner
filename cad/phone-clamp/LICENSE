@@ -1,0 +1,27 @@
+Tripod Mobile Phone Clamp V2 by Stamos
+https://www.printables.com/model/25969-tripod-mobile-phone-clamp-v2
+https://www.printables.com/@Stamos
+
+Everything in this directory (the original meshes in source/, the models in
+models/ that modify them, and the printable parts in export/) is licensed
+under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International License (CC BY-NC-SA 4.0):
+
+    https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
+Modified by the EasyScanner contributors, 2026: the tripod-nut plate is cut
+off the upper part and its jaw rebuilt, and the lower part gets a snap-on
+channel for a 16 x 13 mm aluminium profile; see README.md in this directory.
+
+The lower part also uses the profile snap-on channel from ../models/profile_clip.py
+(CERN-OHL-S-2.0); as part of this remix it is additionally licensed under
+CC BY-NC-SA 4.0 by the same copyright holders.
+
+The original model is itself a remix of "Printable phone holder for modular
+mounting system" by Gavitka (https://www.thingiverse.com/thing:3500945),
+based on the Modular Mounting System (https://www.thingiverse.com/thing:2194278).
+
+The material is provided as-is, without warranties of any kind; see section 5
+of the licence.

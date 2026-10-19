@@ -1,0 +1,12 @@
+# Line-ending policy. gradlew is a shell script and must stay LF; the Windows
+# batch wrapper stays CRLF.
+* text=auto
+gradlew text eol=lf
+*.bat text eol=crlf
+
+# Binary assets — never normalize.
+*.stl binary
+*.jar binary
+*.png binary
+*.jpg binary
+*.pdf binary

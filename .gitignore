@@ -1,0 +1,38 @@
+# =========================================================================
+# EasyScanner — .gitignore
+#
+# android/.gitignore covers the Gradle and Rust build output and
+# android/local.properties (per-machine SDK and libclang paths).
+# =========================================================================
+
+# ── Python (cad/) ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Solids cached from the downloaded meshes by mesh_solid.py — regenerable.
+*.brep
+
+# ── Agent/session state ──────────────────────────────────────────────────
+.omc/
+.claude/
+
+# ── IDE ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+
+# ── OS ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs / temp ──────────────────────────────────────────────────────────
+*.log
+*.tmp
+
+# ── Signing keys — never commit ──────────────────────────────────────────
+*.jks
+*.keystore
+keystore.properties
