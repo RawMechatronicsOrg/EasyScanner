@@ -62,7 +62,12 @@ Camera2 YUV_420_888 ──(direct ByteBuffers, no copy)──▶ nativeProcess
   corners vs 46 without it), and small boards are exactly what the resolution
   governor produces.
 - **Hardware preview.** The preview is a separate Camera2 stream composited by
-  the GPU; the CPU only sees the analysis stream.
+  the GPU; the CPU only sees the analysis stream. It streams at the analysis
+  size whenever the camera can: some HALs scale only to the largest stream and
+  cut the smaller ones from its top-left corner (a Galaxy A23 gave a 640x480
+  YUV that held 640x480 pixels of the 1440x1080 preview — the board and the
+  laser landed in the wrong place on the overlay), so no stream may be larger
+  than the analysis one. The photo JPEG stream does not have this effect.
 - **Zero-copy results.** The core writes one `float[]` (header + layers in frame
   pixels) into a triple buffer; the overlay draws the floats directly with a
   single rotate/scale matrix.
@@ -86,7 +91,9 @@ Camera2 YUV_420_888 ──(direct ByteBuffers, no copy)──▶ nativeProcess
   other (pixel-centre scaling). The desktop prototype had to guess across the
   stills / video crop mismatch.
 - Before calibration the core uses the vendor's `LENS_INTRINSIC_CALIBRATION`
-  when the phone reports it, else focal length ÷ sensor width.
+  when the phone reports it, else focal length ÷ sensor width. A principal
+  point far off the centre is taken as unset and replaced by the centre (the
+  Galaxy A23 reports `[3125, 3125, 0, 0, 0]`).
 - Video stabilisation, OIS and distortion correction are switched off when the
   camera allows it, so the image geometry stays fixed.
 - Lock focus (Settings → Camera → Manual focus) before calibrating: the focal
@@ -250,6 +257,10 @@ slashes.
 - On a real phone (2026-10-19): camera calibration, laser-plane calibration
   (rms 0.35 mm) and a scan exported as PLY (254 k points) — screenshots in the
   [main README](../README.md#first-scan-on-a-real-phone).
+- Galaxy A23 (SM-A236B, 2026-10-28): the board pose holds at 1440x1080,
+  960x720 and 640x480 (57–61 corners, 0.7–1.0 px, the camera position agrees
+  within 1 mm across sizes) with the two HAL workarounds above. Keep ArUco3
+  off there: it finds 56 corners at 1440x1080 and none at 960x720 or below.
 - Not ported: the off-frame virtual margin, PNG snapshots (use the phone's
   screenshot), the Orbiter `orbiter_state.json` lookup (board parameters live in
   Settings; the default is 8x8, 45 mm squares, 33.3 mm markers, DICT_5X5_100).

@@ -33,6 +33,8 @@ class FrameProcessor(filesDir: String, private val listener: Listener) : ImageRe
     private val main = Handler(Looper.getMainLooper())
     val results = TripleBuffer { FrameResult() }
     private var handle = 0L
+    private var loggedW = 0
+    private var loggedH = 0
 
     init {
         handler.post {
@@ -74,6 +76,12 @@ class FrameProcessor(filesDir: String, private val listener: Listener) : ImageRe
         try {
             if (handle == 0L) return
             val p = img.planes
+            if (img.width != loggedW || img.height != loggedH) {
+                loggedW = img.width
+                loggedH = img.height
+                Log.i(TAG, "frames ${img.width}x${img.height}: y stride ${p[0].rowStride}, " +
+                    "uv stride ${p[1].rowStride} pixel stride ${p[1].pixelStride}")
+            }
             val out = results.writeBuffer()
             val t0 = System.nanoTime()
             var n = NativeLib.nativeProcess(

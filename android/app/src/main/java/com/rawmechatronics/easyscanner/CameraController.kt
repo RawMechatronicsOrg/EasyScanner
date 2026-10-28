@@ -37,7 +37,10 @@ data class CameraInfo(
     val analysisSizes: List<Size>,
     /** JPEG sizes with exactly the analysis stream's aspect, largest first: photo keyframes. */
     val stillSizes: List<Size>,
+    /** Largest preview with the sensor's aspect: the viewfinder's shape. */
     val previewSize: Size,
+    /** SurfaceTexture sizes the camera can stream. */
+    val textureSizes: List<Size>,
     val guess: IntrinsicsGuess?,
     val manualFocus: Boolean,
     /** Closest focus, diopters. */
@@ -51,6 +54,15 @@ data class CameraInfo(
     val hasDistortionOff: Boolean,
     val hasStabilizationOff: Boolean,
 ) {
+    /**
+     * The preview stream next to an [analysis] stream: the same size when the
+     * camera can stream it. Some HALs scale only to the largest stream and cut
+     * the smaller ones from its top-left corner (Galaxy A23: a 640x480 YUV next
+     * to a 1440x1080 preview held 640x480 pixels of the preview), so a larger
+     * preview would leave the analysis with a corner of the view.
+     */
+    fun previewFor(analysis: Size): Size = if (analysis in textureSizes) analysis else previewSize
+
     companion object {
         fun backCameraIds(mgr: CameraManager): List<String> = mgr.cameraIdList.filter {
             mgr.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == CameraMetadata.LENS_FACING_BACK
@@ -104,6 +116,7 @@ data class CameraInfo(
                 analysisSizes = analysis,
                 stillSizes = stills,
                 previewSize = preview,
+                textureSizes = texture,
                 guess = guess(c),
                 manualFocus = minFocus > 0f,
                 maxDiopters = minFocus,
@@ -137,9 +150,14 @@ data class CameraInfo(
                 // Android orders (k1, k2, k3, p1, p2); keep the radial terms only
                 val dist = if (d != null && d.size >= 3) doubleArrayOf(d[0].toDouble(), d[1].toDouble(), 0.0, 0.0, d[2].toDouble())
                 else DoubleArray(5)
+                val cx = k[2].toDouble() - (active.left - pre.left)
+                val cy = k[3].toDouble() - (active.top - pre.top)
+                // some HALs fill only the focal length and leave the principal point
+                // at 0, 0 (Samsung Galaxy A23): far off-centre means unset, take the centre
+                val centred = abs(cx - w / 2) <= 0.08 * w && abs(cy - h / 2) <= 0.08 * h
                 return IntrinsicsGuess(
                     k[0].toDouble(), k[1].toDouble(),
-                    k[2].toDouble() - (active.left - pre.left), k[3].toDouble() - (active.top - pre.top),
+                    if (centred) cx else w / 2, if (centred) cy else h / 2,
                     dist, w, h,
                 )
             }
@@ -200,6 +218,7 @@ class CameraController(
     private var stillSizes: List<Size> = emptyList()
     /** A still was asked for while the session was being rebuilt: take it once configured. */
     private var stillWanted = false
+    private var texture: SurfaceTexture? = null
     private var preview: Surface? = null
     private var info: CameraInfo? = null
     private var settings: AppSettings? = null
@@ -212,7 +231,7 @@ class CameraController(
         this.info = info
         this.settings = settings
         this.analysisSize = analysis
-        texture.setDefaultBufferSize(info.previewSize.width, info.previewSize.height)
+        this.texture = texture
         preview = Surface(texture)
         try {
             mgr.openCamera(info.id, executor, object : CameraDevice.StateCallback() {
@@ -313,9 +332,11 @@ class CameraController(
         val d = device ?: return
         val size = analysisSize ?: return
         val surface = preview ?: return
+        val inf = info ?: return
         session?.close()
         session = null
         retireReader()
+        inf.previewFor(size).let { texture?.setDefaultBufferSize(it.width, it.height) }
         val r = ImageReader.newInstance(size.width, size.height, ImageFormat.YUV_420_888, 3)
         r.setOnImageAvailableListener(imageListener, imageHandler)
         reader = r
@@ -449,6 +470,7 @@ class CameraController(
         retireReader()
         preview?.release()
         preview = null
+        texture = null
     }
 
     companion object {
