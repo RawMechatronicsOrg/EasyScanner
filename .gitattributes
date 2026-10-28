@@ -10,3 +10,7 @@ gradlew text eol=lf
 *.png binary
 *.jpg binary
 *.pdf binary
+*.glb binary
+*.FCStd binary
+# STEP is text, but keep it byte for byte as the CAD tool wrote it
+*.step -text

@@ -25,6 +25,11 @@ TIP = 0.3       # flat on the tooth tip
 LEAD_IN = 30    # deg from vertical
 
 
+def foot_z(p, ceiling):
+    """z of the walls' feet, their lowest point (on the bed when printed walls-down)."""
+    return ceiling - p['slot_depth'] - TIP - p['hook'] / math.tan(math.radians(LEAD_IN))
+
+
 def walls(p, y_range, ceiling, edge, top):
     """Both walls, x-symmetric, from y_range[0] to y_range[1].
 
@@ -33,7 +38,7 @@ def walls(p, y_range, ceiling, edge, top):
     """
     s, w, h = p['slot_width'] / 2, p['wall'], p['hook']
     catch = ceiling - p['slot_depth']
-    foot = catch - TIP - h / math.tan(math.radians(LEAD_IN))
+    foot = foot_z(p, ceiling)
     ax, az = s + w, foot
     bx, bz = edge
     length = math.hypot(bx - ax, bz - az)

@@ -12,6 +12,8 @@ units are millimetres.
 | `models/profile_clip.py` | The shared snap-on channel for the 16 × 13 profile: two toothed walls, slot and tooth parameters |
 | `models/ball_mount.py` | Ball-head laser mount: snap-on block with a collet, ball, nut, L-shaped clamp for a Ø12 laser module |
 | `models/laser_clamp_cross.py` | The first laser clamp (laser across the screw axis) — an alternative to the L-shaped clamp, bore 12.0 |
+| `models/flange_clip.py` | A clip that grips one flange of a 16 × 13 U profile and carries the same collet — an alternative to the snap-on block, slides on from the profile's end; used in the [assembly](assembly/README.md) |
+| `assembly/` | The whole scanner as STEP, FreeCAD and glTF, and the render script ([assembly/README.md](assembly/README.md)) |
 | `export/` | Our parts in print orientation (`export_stl.py`) |
 | `phone-clamp/` | The phone clamp — a remix of a third-party model, **under its own licence** ([phone-clamp/README.md](phone-clamp/README.md)) |
 | `export_stl.py` | Writes every printable part to `export/` and `phone-clamp/export/` |

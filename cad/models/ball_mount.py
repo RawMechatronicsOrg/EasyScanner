@@ -103,17 +103,23 @@ def dims(p):
     return d
 
 
-def clip(p, d):
+def channel(p):
+    """The 30 x 30 plate over the profile's top (z 0..PLATE) with the snap walls under it."""
     walls = profile_clip.walls(p, (-BLOCK / 2, BLOCK / 2), 0.0, (BLOCK / 2, 0.0), 0.3)
-    block = cq.Solid.makeBox(BLOCK, BLOCK, PLATE, cq.Vector(-BLOCK / 2, -BLOCK / 2, 0))
+    return cq.Solid.makeBox(BLOCK, BLOCK, PLATE, cq.Vector(-BLOCK / 2, -BLOCK / 2, 0)).fuse(walls)
+
+
+def collet(d):
+    """The collet on a plate whose top is z = PLATE (it starts 0.3 inside it): thread, neck,
+    slotted fingers and the ball's seat; none of the cuts reaches the plate."""
     lo, top = d['lo'], d['thread_top']
-    collet = revolve([(0, PLATE - .3), (d['minor'], PLATE - .3), (d['minor'], d['cone0']),
-                      (d['tip_out'], d['tip']), (0, d['tip'])])
+    body = revolve([(0, PLATE - .3), (d['minor'], PLATE - .3), (d['minor'], d['cone0']),
+                    (d['tip_out'], d['tip']), (0, d['tip'])])
     span = (lo - PITCH, top + PITCH)
     thread = ridge(d['minor'] - .1, d['major'], *span, CREST).intersect(
         revolve([(0, lo), (d['minor'], lo), (d['major'], lo + DEPTH), (d['major'], top - DEPTH),
                  (d['minor'], top), (0, top)]))
-    body = block.fuse(walls, collet, thread)
+    body = body.fuse(thread)
     body = body.cut(cq.Solid.makeSphere(d['seat'], cq.Vector(0, 0, d['zc']), angleDegrees1=-90, angleDegrees2=90))
     # lead-in chamfer on the finger tips' inner edge, then the slots
     body = body.cut(cq.Solid.makeCone(d['tip_in'] - .3, d['tip_in'] + .8, 1.1, cq.Vector(0, 0, d['tip'] - 1.09)))
@@ -122,7 +128,11 @@ def clip(p, d):
         cutter = cq.Solid.makeBox(2 * d['major'] + 4, SLOT_W, d['tip'] - slot_lo + 1,
                                   cq.Vector(-d['major'] - 2, -SLOT_W / 2, slot_lo))
         body = body.cut(cutter.rotate(cq.Vector(0, 0, 0), cq.Vector(0, 0, 1), 45 + 180 * i / (SLOTS // 2)))
-    return body.clean()
+    return body
+
+
+def clip(p, d):
+    return channel(p).fuse(collet(d)).clean()
 
 
 def ball(d):

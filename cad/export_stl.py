@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / 'models'))
 sys.path.insert(0, str(ROOT / 'phone-clamp' / 'models'))
 import ball_mount  # noqa: E402
+import flange_clip  # noqa: E402
 import laser_clamp_cross  # noqa: E402
 import phone_clamp_lower  # noqa: E402
 import phone_clamp_upper  # noqa: E402
@@ -63,4 +64,5 @@ if __name__ == '__main__':
     mesh('updated_phone_clamp_knurl_head_hole.stl', 'knurled_head_upright.stl', ((0, 1), (2, -1), (1, 1)))
     ball_mount_parts()
     model(laser_clamp_cross, OUT / 'ball_mount_laser_clamp_cross.stl')                    # boss down
+    model(flange_clip, OUT / 'ball_mount_flange_clip.stl')                                # collet up, as built
     print('\n'.join(sorted(str(p.relative_to(ROOT)) for p in (*OUT.glob('*.stl'), *CLAMP_OUT.glob('*.stl')))))

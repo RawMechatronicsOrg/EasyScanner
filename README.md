@@ -1,4 +1,4 @@
-# Easy Scanner v0.1
+# Easy Scanner v0.2
 
 A hand-held laser line scanner built around an Android phone: the phone's
 camera, a cheap line laser clamped next to it, and a printed ChArUco board as
@@ -14,28 +14,47 @@ app and printable parts — so other people can build something similar without
 re-deriving everything from scratch. Adapt it to whatever phone, laser and
 profile you have on the shelf.
 
-**Status of v0.1**: the app is verified end to end on the emulator (engine
+**Status**: the app is verified end to end on the emulator (engine
 end-to-end tests: camera position within 0.07–1.3 mm at ~500 mm, laser plane
 within 0.005°); testing on a real phone is in progress. The parts are being
 printed and assembled; the complete scanner has not been debugged as a whole
-yet.
+yet. v0.2 adds the [assembly](cad/assembly/README.md) (STEP, FreeCAD, glTF),
+the flange clip for the laser mount and printable [ChArUco boards](#charuco-boards)
+from A4 to A0 with their generator.
 
-## What you need
+## Required setup
+
+![How a scan works: the phone looks down at the ChArUco board, the laser draws a line across the board and the object](docs/images/scan_schematic.jpg)
+
+The laser must project a **line**, not a dot: a line laser module (a rod or
+Powell lens in front of the diode) fans the beam into a flat sheet of light.
+Where the sheet meets the object it draws a stripe; the camera sees the stripe
+and the board at once, so every stripe pixel becomes a 3D point in the board's
+frame. Keep the board in view while you sweep the line over the object.
+
+| Side | From above | From below |
+|---|---|---|
+| ![Side view of the scanner](docs/images/assembly_side.jpg) | ![The scanner from above](docs/images/assembly_top.jpg) | ![The scanner from below](docs/images/assembly_under.jpg) |
+
+The phone sits in the clamp with its cameras facing down; the clamp snaps
+onto an aluminium U profile, and the ball-head mount at the profile's end
+holds the laser. The assembly as 3D files: [`cad/assembly`](cad/assembly/README.md).
+
+What you need:
 
 - An Android phone, Android 10 (API 29) or newer, arm64.
 - A line laser module, Ø12 mm body (red or green).
-- A 16 × 13 mm aluminium profile — the scanner's frame.
+- A 16 × 13 × 1.5 mm aluminium U profile, about 120 mm — the scanner's frame.
 - An M5 × 25 socket head cap screw and an M5 tap (for the ball).
 - The printed parts from [`cad/`](cad/README.md) (PLA is fine).
-- A ChArUco board, printed flat: by default 8 × 8 squares of 45 mm, 33.3 mm
-  markers, dictionary DICT_5X5_100 (any other size can be set in the app's
-  Settings).
+- A ChArUco board printed flat on a stiff sheet — see [ChArUco boards](#charuco-boards).
 
 ## Quick start
 
-1. **Print the parts**: `cad/export/` (ball-head laser mount) and
-   `cad/phone-clamp/export/` (phone clamp). Print orientations and settings
-   are in [cad/README.md](cad/README.md).
+1. **Print the parts**: `cad/export/` (ball-head laser mount: the snap-on
+   block `ball_mount_clip.stl` or the flange clip `ball_mount_flange_clip.stl`)
+   and `cad/phone-clamp/export/` (phone clamp). Print orientations and
+   settings are in [cad/README.md](cad/README.md).
 2. **Assemble**: clamp the phone and the laser mount onto the profile, put
    the laser into the ring, tilt the ball so the stripe crosses the camera's
    view, tighten the nut.
@@ -46,13 +65,52 @@ yet.
    .\gradlew assembleDebug
    adb install app\build\outputs\apk\debug\app-debug.apk
    ```
-4. **Calibrate the camera** (Camera mode): lock the focus in Settings, press
+4. **Print a board** and enter its numbers in the app's Settings → ChArUco
+   board (they are printed on the sheet too).
+5. **Calibrate the camera** (Camera mode): lock the focus in Settings, press
    Start and move the board slowly through the frame until it says SAVED.
-5. **Calibrate the laser plane** (Laser mode): Start, then sweep the stripe
+6. **Calibrate the laser plane** (Laser mode): Start, then sweep the stripe
    across the board at varied tilts.
-6. **Scan** (Scan mode): put the object on the board, Start and sweep the
+7. **Scan** (Scan mode): put the object on the board, Start and sweep the
    laser over it; Export writes a binary PLY in the board frame. **Photos ▶**
    adds posed keyframes to an Orbiter photo session for `orbiter-recon`.
+
+## ChArUco boards
+
+Ready-made boards in [`charuco/boards`](charuco/boards), vector PDF at true
+scale. All use `DICT_5X5_100` (dictionary id 5) and marker ids from 0.
+
+| Paper | Squares (X × Y) | Square | Marker | File |
+|---|---|---|---|---|
+| A4 | 4 × 6 | 45 mm | 33.3 mm | [charuco_A4_4x6_45mm.pdf](charuco/boards/charuco_A4_4x6_45mm.pdf) |
+| A3 | 6 × 8 | 45 mm | 33.3 mm | [charuco_A3_6x8_45mm.pdf](charuco/boards/charuco_A3_6x8_45mm.pdf) |
+| A2 | 8 × 10 | 45 mm | 33.3 mm | [charuco_A2_8x10_45mm.pdf](charuco/boards/charuco_A2_8x10_45mm.pdf) |
+| A1 | 9 × 13 | 60 mm | 44.4 mm | [charuco_A1_9x13_60mm.pdf](charuco/boards/charuco_A1_9x13_60mm.pdf) |
+| A0 | 10 × 14 | 80 mm | 59.2 mm | [charuco_A0_10x14_80mm.pdf](charuco/boards/charuco_A0_10x14_80mm.pdf) |
+
+Pick the smallest board that the object leaves mostly visible; bigger squares
+are read from further away. In the app's Settings → ChArUco board enter
+Squares X, Squares Y, Square (mm) and Marker (mm) from the table (or from the
+line printed on the sheet); the app's default is 8 × 8 of 45 mm.
+
+Printing: print at 100 % ("Actual size"), never "Fit to page", and check the
+100 mm scale bar with a ruler — the square size is what makes the scan
+metric; if it printed slightly off, enter the measured square and marker sizes. Glue the sheet
+flat onto something stiff (foam board, glass); a wavy sheet bends the frame.
+
+Other sizes: [`charuco/make_board.py`](charuco/make_board.py) draws any board.
+
+```powershell
+pip install opencv-python numpy reportlab pymupdf
+cd charuco
+python make_board.py                                        # every preset above into boards/
+python make_board.py --paper A3 --squares 7x9 --square 40 -o my_board.pdf
+python make_board.py --check                                # rasterise the PDFs and detect every corner
+```
+
+`--marker` sets the marker size (default 0.74 of the square), `--dict` the
+ArUco dictionary; a board needs at most as many markers as the dictionary has
+(half its squares).
 
 ## Repository map
 
@@ -61,21 +119,25 @@ EasyScanner/
 ├── README.md        ← you are here
 ├── LICENSE          ← Apache-2.0 (default for source code)
 ├── android/         ← the Android app: Kotlin UI + Rust core (OpenCV ChArUco, laser, geometry)
-└── cad/             ← printable parts, CadQuery sources + STL
-    ├── LICENSE      ← CERN-OHL-S-2.0 (hardware)
-    └── phone-clamp/ ← the phone clamp, a remix of a third-party model
-        └── LICENSE  ← CC BY-NC-SA 4.0
+├── cad/             ← printable parts, CadQuery sources + STL
+│   ├── LICENSE      ← CERN-OHL-S-2.0 (hardware)
+│   ├── assembly/    ← the whole scanner: STEP, FreeCAD, glTF, render script
+│   └── phone-clamp/ ← the phone clamp, a remix of a third-party model
+│       └── LICENSE  ← CC BY-NC-SA 4.0
+├── charuco/         ← ChArUco board generator and ready PDFs (A4–A0)
+└── docs/images/     ← renders used in this README
 ```
 
 ## License
 
 | What                                                     | License                                       |
 |----------------------------------------------------------|-----------------------------------------------|
-| Source code (Android app, Rust core, scripts, configs)   | [Apache-2.0](LICENSE)                         |
-| Hardware designs in `cad/` (CadQuery models, `export_stl.py`, STL) | [CERN-OHL-S-2.0](cad/LICENSE)  |
-| The phone clamp in `cad/phone-clamp/`                    | [CC BY-NC-SA 4.0](cad/phone-clamp/LICENSE)    |
+| Source code (Android app, Rust core, scripts, configs, `charuco/`) | [Apache-2.0](LICENSE)               |
+| Hardware designs in `cad/` (CadQuery models, `export_stl.py`, STL, the assembly) | [CERN-OHL-S-2.0](cad/LICENSE) |
+| The phone clamp in `cad/phone-clamp/` and its parts in `cad/assembly/` | [CC BY-NC-SA 4.0](cad/phone-clamp/LICENSE) |
+| Renders in `docs/images/` (they show the phone clamp)    | [CC BY-NC-SA 4.0](cad/phone-clamp/LICENSE)    |
 
 The phone clamp is [Tripod Mobile Phone Clamp V2](https://www.printables.com/model/25969-tripod-mobile-phone-clamp-v2)
 by Stamos, remixed for the scanner; it keeps its original non-commercial
 share-alike licence. Files outside `cad/` are covered by the root `LICENSE`
-(Apache-2.0).
+(Apache-2.0) unless the table says otherwise.

@@ -14,6 +14,9 @@ venv/
 # Solids cached from the downloaded meshes by mesh_solid.py — regenerable.
 *.brep
 
+# FreeCAD backups.
+*.FCBak
+
 # ── Agent/session state ──────────────────────────────────────────────────
 .omc/
 .claude/
