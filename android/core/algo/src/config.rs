@@ -132,6 +132,12 @@ impl From<IntrinsicsJson> for Intrinsics {
     }
 }
 
+impl From<Intrinsics> for IntrinsicsJson {
+    fn from(k: Intrinsics) -> Self {
+        IntrinsicsJson { fx: k.fx, fy: k.fy, cx: k.cx, cy: k.cy, dist: k.dist, width: k.width, height: k.height }
+    }
+}
+
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(default)]
 pub struct CameraCfg {
@@ -260,10 +266,29 @@ pub struct PlaneFile {
     /// The plane is in this camera's frame; absent in the desktop prototype's files.
     #[serde(default)]
     pub camera_id: Option<String>,
+    /// The camera model the plane was fitted with: the stripe rays, so the
+    /// plane, hold only for it. Absent in older files.
+    #[serde(default)]
+    pub k: Option<IntrinsicsJson>,
 }
 
-/// The saved laser plane `(n, d)`, if present and taken with this camera.
-pub fn load_plane(dir: &Path, camera_id: &str) -> Option<(V3, f64)> {
+/// A saved laser plane `n·X = d` and the camera model it was fitted with.
+#[derive(Clone, Copy, Debug)]
+pub struct SavedPlane {
+    pub n: V3,
+    pub d: f64,
+    pub k: Option<Intrinsics>,
+}
+
+impl SavedPlane {
+    /// Usable with the camera model `k`: fitted with it, not just present.
+    pub fn fits(&self, k: &Intrinsics) -> bool {
+        self.k.is_some_and(|pk| k.same_model(&pk))
+    }
+}
+
+/// The saved laser plane, if present and taken with this camera.
+pub fn load_plane(dir: &Path, camera_id: &str) -> Option<SavedPlane> {
     let text = fs::read_to_string(dir.join(PLANE_FILE)).ok()?;
     let f: PlaneFile = serde_json::from_str(&text).ok()?;
     if f.camera_id.as_deref().is_some_and(|id| id != camera_id) {
@@ -272,17 +297,18 @@ pub fn load_plane(dir: &Path, camera_id: &str) -> Option<(V3, f64)> {
     }
     let n = normalize(f.n)?;
     let ln = crate::geom::norm(f.n);
-    Some((n, f.d / ln))
+    Some(SavedPlane { n, d: f.d / ln, k: f.k.map(Into::into) })
 }
 
-pub fn save_plane(dir: &Path, camera_id: &str, n: V3, d: f64, rms_mm: f64, n_points: usize) -> std::io::Result<()> {
+pub fn save_plane(dir: &Path, camera_id: &str, plane: &SavedPlane, rms_mm: f64, n_points: usize) -> std::io::Result<()> {
     let f = PlaneFile {
-        n,
-        d,
+        n: plane.n,
+        d: plane.d,
         rms_mm: Some(rms_mm),
         n_points: Some(n_points),
         frame: "opencv_camera_mm".into(),
         camera_id: Some(camera_id.into()),
+        k: plane.k.map(Into::into),
     };
     fs::write(dir.join(PLANE_FILE), serde_json::to_string_pretty(&f)?)
 }
@@ -310,5 +336,23 @@ mod tests {
         assert_eq!(cfg.board.squares_y, 8);
         assert_eq!(cfg.laser.laser_color(), LaserColor::Green);
         assert_eq!(cfg.calib_views, 64);
+    }
+
+    #[test]
+    fn plane_remembers_its_camera_model() {
+        let dir = std::env::temp_dir().join(format!("es-plane-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let k = Intrinsics { fx: 490.0, fy: 490.0, cx: 320.0, cy: 240.0, dist: [0.0; 5], width: 640.0, height: 480.0 };
+        let plane = SavedPlane { n: [0.0, 0.8, -0.6], d: -120.0, k: Some(k) };
+        save_plane(&dir, "0", &plane, 0.4, 900).unwrap();
+        let back = load_plane(&dir, "0").unwrap();
+        assert!(back.fits(&k) && back.fits(&k.for_frame(1440, 1080)));
+        assert!(!back.fits(&Intrinsics { cx: 0.0, ..k }), "a re-calibrated camera makes the plane stale");
+        assert!(load_plane(&dir, "1").is_none());
+        // the desktop prototype's file has no model: present, but not usable
+        fs::write(dir.join(PLANE_FILE), r#"{"n":[0,0.8,-0.6],"d":-120,"rms_mm":0.7,"n_points":10,"frame":"opencv_camera_mm"}"#)
+            .unwrap();
+        assert!(!load_plane(&dir, "0").unwrap().fits(&k));
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

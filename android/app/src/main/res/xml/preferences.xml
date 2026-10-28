@@ -2,6 +2,14 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory android:title="Interface">
+        <SwitchPreferenceCompat
+            android:key="expert_mode"
+            android:title="Expert mode"
+            android:summary="The four tool modes (View, Camera, Laser, Scan) instead of the guided steps"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Performance">
         <ListPreference
             android:key="target_fps"
@@ -145,7 +153,12 @@
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Photos (Scan → Photos)">
+    <PreferenceCategory android:title="Photos">
+        <SwitchPreferenceCompat
+            android:key="photos_with_scan"
+            android:title="Take photos during every scan"
+            android:summary="Posed full-resolution photos next to the laser cloud, for a textured mesh (orbiter-recon)"
+            android:defaultValue="true" />
         <ListPreference
             android:key="photo_trigger"
             android:title="Take a photo"

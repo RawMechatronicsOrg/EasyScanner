@@ -32,8 +32,20 @@ data class AppSettings(
     val roiTracking: Boolean,
     val draw: Draw,
     val photos: Photos,
+    /** The four tool modes instead of the guided steps. */
+    val expertMode: Boolean,
+    /** [board] as last confirmed in the guided Board step, or null. */
+    val boardConfirmed: String?,
 ) {
-    data class Board(val squaresX: Int, val squaresY: Int, val squareMm: Double, val markerMm: Double, val dict: Int)
+    data class Board(val squaresX: Int, val squaresY: Int, val squareMm: Double, val markerMm: Double, val dict: Int) {
+        /** Identifies the board, so changing any number un-confirms it. */
+        val key get() = "${squaresX}x$squaresY/$squareMm/$markerMm/$dict"
+    }
+
+    /** A printable board from `charuco/boards/boards.json`. */
+    data class BoardPreset(val paper: String, val board: Board) {
+        val label get() = "$paper · ${board.squaresX}×${board.squaresY} · ${board.squareMm.fmt()} mm"
+    }
     data class Draw(val grid: Boolean, val axes: Boolean, val corners: Boolean, val volume: Boolean, val cloud: Boolean)
 
     /** Photo keyframes: [trigger] is "both", "interval" or "motion". */
@@ -44,6 +56,8 @@ data class AppSettings(
         val turnDeg: Double,
         val maxSpeedMmS: Double,
         val maxTurnDegS: Double,
+        /** Take photo keyframes during every scan. */
+        val withScan: Boolean,
     )
 
     /** The core's `Config` JSON (`core/algo/src/config.rs`). */
@@ -151,8 +165,33 @@ data class AppSettings(
                     turnDeg = dbl("photo_turn_deg", 10.0),
                     maxSpeedMmS = dbl("photo_max_speed", 40.0),
                     maxTurnDegS = dbl("photo_max_turn", 8.0),
+                    withScan = p.getBoolean("photos_with_scan", true),
                 ),
+                expertMode = p.getBoolean("expert_mode", false),
+                boardConfirmed = p.getString("board_confirmed", null),
             )
+        }
+
+        val BOARD_PRESETS = listOf(
+            BoardPreset("A4", Board(4, 6, 45.0, 33.3, 5)),
+            BoardPreset("A3", Board(6, 8, 45.0, 33.3, 5)),
+            BoardPreset("A2", Board(8, 10, 45.0, 33.3, 5)),
+            BoardPreset("A1", Board(9, 13, 60.0, 44.4, 5)),
+            BoardPreset("A0", Board(10, 14, 80.0, 59.2, 5)),
+        )
+
+        /** Make [b] the board in the settings. */
+        fun saveBoard(ctx: Context, b: Board) {
+            PreferenceManager.getDefaultSharedPreferences(ctx).edit()
+                .putString("board_squares_x", b.squaresX.toString())
+                .putString("board_squares_y", b.squaresY.toString())
+                .putString("board_square_mm", b.squareMm.fmt())
+                .putString("board_marker_mm", b.markerMm.fmt())
+                .putString("board_dict", b.dict.toString())
+                .apply()
         }
     }
 }
+
+/** 45.0 → "45", 33.3 → "33.3": the way the board sheets print the numbers. */
+private fun Double.fmt() = if (this == Math.floor(this)) toInt().toString() else toString()

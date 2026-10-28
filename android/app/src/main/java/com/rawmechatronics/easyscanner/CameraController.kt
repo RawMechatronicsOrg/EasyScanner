@@ -10,6 +10,8 @@ import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.TotalCaptureResult
 import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
 import android.media.ImageReader
@@ -224,6 +226,22 @@ class CameraController(
     private var settings: AppSettings? = null
     private var analysisSize: Size? = null
 
+    /** Lens focus of the last frame (diopters), for locking it where autofocus settled. */
+    @Volatile var focusDiopters: Float? = null
+        private set
+    /** Autofocus had settled (or the focus is manual) at [focusDiopters]. */
+    @Volatile var focusSettled = false
+        private set
+
+    private val frameCallback = object : CameraCaptureSession.CaptureCallback() {
+        override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
+            val af = result.get(CaptureResult.CONTROL_AF_STATE)
+            focusDiopters = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
+            focusSettled = request.get(CaptureRequest.CONTROL_AF_MODE) == CameraMetadata.CONTROL_AF_MODE_OFF ||
+                af == CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED || af == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
+        }
+    }
+
     @SuppressLint("MissingPermission") // the activity checks CAMERA before opening
     fun open(info: CameraInfo, texture: SurfaceTexture, analysis: Size, settings: AppSettings) = handler.post {
         closeNow()
@@ -386,7 +404,7 @@ class CameraController(
     private fun repeat(s: CameraCaptureSession) {
         try {
             val b = request(CameraDevice.TEMPLATE_RECORD) ?: return
-            s.setRepeatingRequest(b.build(), null, handler)
+            s.setRepeatingRequest(b.build(), frameCallback, handler)
         } catch (e: Exception) {
             Log.w(TAG, "repeating request failed", e)
             onError("camera request failed: ${e.message}")

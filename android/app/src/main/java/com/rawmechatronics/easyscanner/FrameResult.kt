@@ -85,7 +85,10 @@ class FrameResult(capacity: Int = 32 * 1024) {
         const val CAM_SPEED = 49
         const val CAM_TURN = 50
         const val PHOTO_SERIAL = 51
-        const val LEN = 52
+        const val K_OK = 52
+        const val PLANE_STALE = 53
+        const val N_MARKERS = 54
+        const val LEN = 55
     }
 
     /** Event bits in [H.EVENTS], mirroring `frame_out::ev`. */
@@ -106,6 +109,7 @@ class FrameResult(capacity: Int = 32 * 1024) {
         const val HOLD_SETTLING = 5
         const val HOLD_MOVING = 6
         const val HOLD_FEW_CORNERS = 7
+        const val NO_PHOTOS = 8
     }
 
     /** Layer kinds, mirroring `frame_out::layer`. */

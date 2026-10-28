@@ -62,7 +62,12 @@ pub mod h {
     pub const CAM_TURN: usize = 50;
     /// the serial the app gave the last photo session opened (open or closed)
     pub const PHOTO_SERIAL: usize = 51;
-    pub const LEN: usize = 52;
+    /// a saved camera calibration taken at the current lens focus
+    pub const K_OK: usize = 52;
+    /// a laser plane is saved but was fitted with another camera model
+    pub const PLANE_STALE: usize = 53;
+    pub const N_MARKERS: usize = 54;
+    pub const LEN: usize = 55;
 }
 
 /// One-shot event bits in `h::EVENTS`.
@@ -87,6 +92,8 @@ pub mod photo_state {
     pub const HOLD_SETTLING: f64 = 5.0;
     pub const HOLD_MOVING: f64 = 6.0;
     pub const HOLD_FEW_CORNERS: f64 = 7.0;
+    /// a session is open for the scan, without photos
+    pub const NO_PHOTOS: f64 = 8.0;
 }
 
 /// Layer kinds.

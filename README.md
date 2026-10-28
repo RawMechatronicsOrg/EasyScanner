@@ -70,17 +70,30 @@ What you need:
    .\gradlew assembleDebug
    adb install app\build\outputs\apk\debug\app-debug.apk
    ```
-4. **Print a board** and enter its numbers in the app's Settings → ChArUco
-   board (they are printed on the sheet too).
-5. **Calibrate the camera** (Camera mode): lock the focus in Settings, press
-   Start and move the board slowly through the frame until it says SAVED.
-6. **Calibrate the laser plane** (Laser mode): Start, then sweep the stripe
-   across the board at varied tilts.
-7. **Scan** (Scan mode): put the object on the board, Start and sweep the
-   laser over it; Export writes a binary PLY (mm, Z up, the object standing
-   over the board), copies it to `Download/EasyScanner` and opens the share
-   sheet. **Photos ▶** adds posed keyframes to an Orbiter photo session for
-   `orbiter-recon`.
+4. **Print a board**, then follow the app's steps — each one says what to do
+   and moves on by itself when it is done; a finished step can be tapped to
+   do it again:
+   1. **Board**: pick the board you printed (its numbers are on the sheet)
+      and point the phone at it; Board OK once the grid lies on the print.
+   2. **Focus**: hold the phone at the scanning distance and lock the focus
+      where autofocus settled (a calibration holds only at its focus).
+   3. **Camera**: Start, then move the phone slowly around the board at
+      varied tilts until it says SAVED.
+   4. **Laser plane**: Start, then sweep the stripe across the empty board at
+      varied tilts. A plane fitted with an earlier camera calibration is
+      refused, so a re-calibrated camera always gets a fresh plane.
+   5. **Scan**: put the object on the board, Start, sweep the laser over it
+      and walk around it; photos are taken on the way. Finish copies the
+      whole scan to `Download/EasyScanner/<time>/` — `scan.ply` (binary
+      PLY, mm, Z up, the object standing over the board), `laser.ply`, the
+      photos and `session.json` for `orbiter-recon` — where a computer sees
+      it over USB; Share PLY sends the cloud on.
+
+   Nothing is lost on the way: the scan's cloud is written into its session
+   on every pause and whenever the app leaves the screen, the session carries
+   on after it comes back, and a scan that never reached `Download` (the app
+   was killed) is offered for copying on the next start. Settings → Expert
+   mode brings back the four tool modes (View, Camera, Laser, Scan).
 
 ## First scan on a real phone
 

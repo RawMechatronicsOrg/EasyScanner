@@ -276,6 +276,18 @@ impl Intrinsics {
         Intrinsics { fx: f, fy: f, cx: w / 2.0, cy: h / 2.0, dist: self.dist, width: w, height: h }
     }
 
+    /// The same camera model as `other` up to the rounding of a saved file:
+    /// what a laser plane fitted with `other` needs to still hold.
+    pub fn same_model(&self, other: &Intrinsics) -> bool {
+        let o = other.for_frame(self.width as u32, self.height as u32);
+        self.same_aspect(other.width as u32, other.height as u32)
+            && (self.fx - o.fx).abs() <= 0.002 * self.fx
+            && (self.fy - o.fy).abs() <= 0.002 * self.fy
+            && (self.cx - o.cx).abs() <= 0.002 * self.width
+            && (self.cy - o.cy).abs() <= 0.002 * self.height
+            && self.dist.iter().zip(&o.dist).all(|(a, b)| (a - b).abs() <= 1e-3)
+    }
+
     /// Project a camera-frame point (mm) to pixels. `None` behind the camera or
     /// so far off-axis that the polynomial distortion model folds back.
     pub fn project(&self, p: V3) -> Option<[f64; 2]> {
@@ -445,6 +457,17 @@ mod tests {
         let x = mat_vec(&r, [1.0, 0.0, 0.0]);
         assert!(close(x[0], 0.0, 1e-12) && close(x[1], 1.0, 1e-12));
         assert!(close(rotation_distance(&IDENTITY, &r), std::f64::consts::FRAC_PI_2, 1e-12));
+    }
+
+    #[test]
+    fn same_model_across_sizes_not_across_calibrations() {
+        let k = test_k();
+        assert!(k.same_model(&k.for_frame(640, 480)));
+        assert!(k.for_frame(640, 480).same_model(&k));
+        assert!(!k.same_model(&Intrinsics { fx: k.fx * 1.01, ..k }));
+        assert!(!k.same_model(&Intrinsics { cx: 0.0, ..k }));
+        assert!(!k.same_model(&Intrinsics { dist: [0.0; 5], ..k }));
+        assert!(!k.same_model(&k.for_frame(1920, 1080)));
     }
 
     #[test]

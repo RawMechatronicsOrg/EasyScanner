@@ -6,7 +6,14 @@ anchor. It is a native port of an earlier desktop prototype (Python + OpenCV,
 not part of this repository), which is why some file formats and tuning units
 below are described as "the desktop prototype's".
 
-Four modes on top of a live viewfinder:
+The screen leads through the steps a scan needs — Board (pick the printed
+board, confirm it in view; markers seen without corners say the settings do
+not match the print), Focus (lock the lens where autofocus settled, or at the
+saved calibration's focus), Camera, Laser plane, Scan, Saved — each one done
+when its state holds (`Wizard.kt`: a confirmed board, a locked focus, a
+calibration at that focus, a plane fitted with that calibration), so a step
+whose prerequisite breaks comes back by itself. Settings → Expert mode shows
+the four tool modes underneath instead:
 
 | mode | does |
 |------|------|
@@ -101,8 +108,11 @@ Camera2 YUV_420_888 ──(direct ByteBuffers, no copy)──▶ nativeProcess
   HUD warns when it differs.
 - Calibration files keep the desktop prototype's formats, in the app's files dir:
   `live_intrinsics.json` (plus `camera_id`, `focus_diopters`, `rms_px`) and
-  `laser_plane.json` (plus `camera_id`); a file taken with another camera is
-  ignored. Scans export to
+  `laser_plane.json` (plus `camera_id` and `k`, the camera model it was
+  fitted with); a file taken with another camera is ignored, and a plane
+  whose `k` is not the current calibration (or that has none, as the desktop
+  prototype's) is kept but not used — the stripe rays it was fitted from
+  changed with the camera model. Expert-mode Export writes to
   `/sdcard/Android/data/com.rawmechatronics.easyscanner/files/scans/scan_<time>.ply`
   (binary PLY, XYZ mm + RGB, Z up: the board frame turned 180° about its X
   axis and shifted by the board height, so the object stands on +Z over
@@ -120,7 +130,16 @@ Camera2 YUV_420_888 ──(direct ByteBuffers, no copy)──▶ nativeProcess
 
 ## Photo keyframes → dense mesh and texture
 
-**Scan → Photos ▶** opens a photo session; the phone then takes a
+Every guided scan runs in a session (expert mode: **Scan → Photos ▶**); with
+Settings → Photos → *Take photos during every scan* off it keeps only the
+cloud. The scan's cloud goes into the session as `laser.ply` (native frame)
+and `scan.ply` (Z up) on every pause, whenever the app leaves the screen
+(the session stays open and carries on after the resume) and on Finish,
+which also copies the session to `Download/EasyScanner/<id>/` through
+MediaStore (`SessionExport.kt`; an `exported.json` marker remembers it). A
+session that never got there — the process was killed — is offered for
+copying on the next start; a session is deleted only when nothing was
+captured, or on Discard. In a session the phone takes a
 full-resolution still on its own, either every N seconds or once the camera
 has moved / turned far enough since the last one (Settings → Photos; long
 press on the button takes one at the next steady frame). A due keyframe waits
@@ -178,9 +197,9 @@ orbiter-recon --session <dir> --mode dense          # + PatchMatch / fusion merg
 A session directory that already exists is never written into.
 recon needs ≥ 1000 laser points and ≥ 20 selected photos (each seeing the
 object fill ≥ 25 % of the frame from 150–500 mm; `views.SelectParams`), so
-scan with the laser and take photos in the same session. Leaving Scan mode or
-the screen, changing the board or re-calibrating the camera closes the
-session.
+scan with the laser and take photos in the same session. Changing the board
+or the camera, re-calibrating the camera, or (expert mode) leaving Scan mode
+closes the session, its files kept.
 
 ## Toolchain
 

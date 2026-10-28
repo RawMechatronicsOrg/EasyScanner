@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use opencv::core::{CV_8UC1, Mat};
 use scan_algo::cloud::PointCloud;
-use scan_algo::config::{self, Config, IntrinsicsFile};
+use scan_algo::config::{self, Config, IntrinsicsFile, SavedPlane};
 use scan_algo::focus::laplacian_variance;
 use scan_algo::geom::{FaceOutFrame, Intrinsics, Pose, V3, euler_xyz_deg};
 use scan_algo::keyframe::{Due, Hold, Miss, PoseTrack, TrackedPose, Trigger};
@@ -56,7 +56,14 @@ pub mod cmd {
     pub const PHOTO_ADD: i32 = 17;
     /// arg: why — the requested still could not be taken or written
     pub const PHOTO_FAILED: i32 = 18;
+    /// pause the scan and write the cloud into the open session (the app is leaving the screen)
+    pub const CHECKPOINT: i32 = 19;
+    /// no more photos in the open session, which keeps the scan (no still stream can be had)
+    pub const PHOTOS_OFF: i32 = 20;
 }
+
+/// The Z-up cloud a session keeps next to orbiter-native's `laser.ply`.
+const SESSION_SCAN_PLY: &str = "scan.ply";
 
 /// Points drawn from the accumulated cloud each frame.
 const PREVIEW_POINTS: usize = 4000;
@@ -102,6 +109,17 @@ struct PhotosStartArg {
     started_utc: String,
     #[serde(default)]
     serial: f64,
+    /// take photo keyframes; without them the session only keeps the scan
+    #[serde(default = "yes")]
+    photos: bool,
+    /// a new scan: start from an empty cloud, unless it holds points no
+    /// session has saved yet (those go into this one rather than away)
+    #[serde(default)]
+    fresh: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -121,12 +139,14 @@ pub struct Engine {
     calib: LiveCalibrator,
     calib_active: bool,
     calib_state: CalibState,
-    plane: Option<(V3, f64)>,
+    plane: Option<SavedPlane>,
     plane_cal: PlaneCalibrator,
     plane_active: bool,
     plane_solved_at: usize,
     scan_on: bool,
     cloud: PointCloud,
+    /// The cloud has points the open session (or, with none open, any session) has not written.
+    cloud_unsaved: bool,
     preview: Vec<[f32; 3]>,
     frame_no: u64,
     laser: LaserDetector,
@@ -144,6 +164,7 @@ pub struct Engine {
     track: PoseTrack,
     trigger: Trigger,
     photos: Option<PhotoSession>,
+    photos_enabled: bool,
     stills: Vec<Still>,
     photo_state: f64,
     photo_serial: f64,
@@ -169,6 +190,7 @@ impl Engine {
             plane_active: false,
             plane_solved_at: 0,
             scan_on: false,
+            cloud_unsaved: false,
             preview: Vec::new(),
             frame_no: 0,
             laser: LaserDetector::default(),
@@ -186,6 +208,7 @@ impl Engine {
             track: PoseTrack::new(TRACK_FRAMES),
             trigger: Trigger::default(),
             photos: None,
+            photos_enabled: true,
             stills: Vec::new(),
             photo_state: photo_state::OFF,
             photo_serial: 0.0,
@@ -210,13 +233,35 @@ impl Engine {
             self.plane_cal.reset();
             self.close_photos("board changed");
         }
+        if cfg.camera.id != self.cfg.camera.id {
+            self.close_photos("camera changed");
+        }
         self.calib.target = cfg.calib_views.max(4);
         self.plane_cal.min_lines = cfg.plane_views.max(3);
         self.cloud.max_points = cfg.max_cloud_points;
         self.cfg = cfg;
+        let k_before = self.k_base;
         self.reload_calibrations();
+        // a model, not bits: a K just solved and the same K read back from its file differ in the last digits
+        if !self.k_base.same_model(&k_before) {
+            // the session's photos and poses are in the old camera model
+            self.close_photos("camera model changed");
+        }
         self.events |= ev::MESSAGES;
         Ok(())
+    }
+
+    /// The laser plane, when it was fitted with the current camera model.
+    fn usable_plane(&self) -> Option<(V3, f64)> {
+        self.plane.filter(|p| p.fits(&self.k_base)).map(|p| (p.n, p.d))
+    }
+
+    /// A saved camera calibration taken at the lens focus in use now.
+    fn k_ok(&self) -> bool {
+        self.k_file.as_ref().is_some_and(|f| match (f.focus_diopters, self.cfg.camera.focus_diopters) {
+            (Some(a), Some(b)) => (a - b).abs() <= 0.05,
+            (a, b) => a.is_none() && b.is_none(),
+        })
     }
 
     /// Calibrations from disk that belong to this camera. K falls back to the
@@ -347,9 +392,11 @@ impl Engine {
         // ── classify by 3-D volume membership; accumulate the scan ──
         self.pts_in.clear();
         self.pts_out.clear();
-        let classified = !self.plane_active && self.plane.is_some() && pose.is_some() && found;
-        if let (true, Some((n, d)), Some(p)) = (classified, self.plane, pose) {
+        let plane = self.usable_plane();
+        let classified = !self.plane_active && plane.is_some() && pose.is_some() && found;
+        if let (true, Some((n, d)), Some(p)) = (classified, plane, pose) {
             let mut inside = vec![false; self.laser_px.len()];
+            let mut pushed = false;
             let (cloud, px, scan_on) = (&mut self.cloud, &self.laser_px, self.scan_on);
             stripe::to_laser_plane(px, &k, n, d, |i, x| {
                 let b = p.to_board(x);
@@ -358,9 +405,11 @@ impl Engine {
                     if scan_on {
                         let (u, v) = (px[i][0].round() as usize, px[i][1].round() as usize);
                         cloud.push(b, f.rgb_at(u.min(f.width - 1), v.min(f.height - 1)));
+                        pushed = true;
                     }
                 }
             });
+            self.cloud_unsaved |= pushed;
             for (q, ins) in self.laser_px.iter().zip(&inside) {
                 if *ins { self.pts_in.push(*q) } else { self.pts_out.push(*q) }
             }
@@ -457,8 +506,13 @@ impl Engine {
     }
 
     fn accept_plane(&mut self, fit: PlaneFit, forced: bool) {
-        let saved = config::save_plane(&self.dir, &self.cfg.camera.id, fit.n, fit.d, fit.rms_mm, self.plane_cal.count());
-        self.plane = Some((fit.n, fit.d));
+        if !self.cloud.is_empty() {
+            // the points so far are triangulated with the old plane: they end that scan
+            self.close_photos("laser plane re-fitted");
+        }
+        let plane = SavedPlane { n: fit.n, d: fit.d, k: Some(self.k_base) };
+        let saved = config::save_plane(&self.dir, &self.cfg.camera.id, &plane, fit.rms_mm, self.plane_cal.count());
+        self.plane = Some(plane);
         self.plane_active = false;
         self.plane_cal.reset();
         self.plane_solved_at = 0;
@@ -481,6 +535,7 @@ impl Engine {
         found: bool,
         roi_frac: f64,
     ) {
+        let (plane_ok, k_ok, n_markers) = (self.usable_plane().is_some(), self.k_ok(), self.tracker.n_markers());
         let o = &mut self.out;
         o.set(h::FRAME_W, self.last_wh.0 as f64);
         o.set(h::FRAME_H, self.last_wh.1 as f64);
@@ -522,12 +577,15 @@ impl Engine {
         o.set(h::PLANE_TARGET, self.plane_cal.min_lines as f64);
         o.set(h::PLANE_SPREAD, self.plane_cal.spread());
         o.set(h::PLANE_RMS, self.plane_cal.last_rms.unwrap_or(f64::NAN));
-        o.set(h::PLANE_OK, self.plane.is_some() as u8 as f64);
+        o.set(h::PLANE_OK, plane_ok as u8 as f64);
+        o.set(h::PLANE_STALE, (self.plane.is_some() && !plane_ok) as u8 as f64);
         o.set(h::SCAN_ON, self.scan_on as u8 as f64);
         o.set(h::CLOUD_POINTS, self.cloud.len() as f64);
         o.set(h::CLOUD_MB, self.cloud.nbytes() as f64 / 1e6);
         o.set(h::IN_VOLUME, self.pts_in.len() as f64);
         o.set(h::K_CALIBRATED, self.k_file.is_some() as u8 as f64);
+        o.set(h::K_OK, k_ok as u8 as f64);
+        o.set(h::N_MARKERS, n_markers as f64);
         o.set(h::FX, k.fx);
         o.set(h::FY, k.fy);
         o.set(h::CX, k.cx);
@@ -644,6 +702,8 @@ impl Engine {
             cmd::SCAN_START => {
                 if self.plane.is_none() {
                     "calibrate the laser plane first".to_string()
+                } else if self.usable_plane().is_none() {
+                    "the laser plane was fitted with another camera calibration — calibrate it again".to_string()
                 } else {
                     self.scan_on = true;
                     self.plane_active = false;
@@ -653,13 +713,29 @@ impl Engine {
             }
             cmd::SCAN_STOP => {
                 self.scan_on = false;
-                format!("paused — {} pts", self.cloud.len())
+                let saved = self.checkpoint();
+                format!("paused — {} pts{saved}", self.cloud.len())
+            }
+            cmd::CHECKPOINT => {
+                self.scan_on = false;
+                // a still asked for now never comes back: the camera is closing
+                self.trigger.clear_pending();
+                let saved = self.checkpoint();
+                format!("paused — {} pts{saved}", self.cloud.len())
             }
             cmd::CLOUD_CLEAR => {
                 self.cloud.clear();
                 self.preview.clear();
+                self.cloud_unsaved = false;
                 self.scan_on = false;
                 "cloud cleared".to_string()
+            }
+            cmd::PHOTOS_OFF => {
+                if self.photos.is_none() {
+                    "photos are off".to_string()
+                } else {
+                    self.stop_photos_keep_session(arg)
+                }
             }
             cmd::EXPORT_PLY => self.export_ply(arg),
             cmd::PHOTOS_START => self.open_photos(arg),
@@ -696,7 +772,7 @@ impl Engine {
         match code {
             cmd::CALIB_START..=cmd::CALIB_RESET | cmd::FORGET_INTRINSICS => self.msgs.calib = msg.clone(),
             cmd::PLANE_START..=cmd::PLANE_FORCE | cmd::FORGET_PLANE => self.msgs.plane = msg.clone(),
-            cmd::PHOTOS_START..=cmd::PHOTO_FAILED => self.msgs.photos = msg.clone(),
+            cmd::PHOTOS_START..=cmd::PHOTO_FAILED | cmd::PHOTOS_OFF => self.msgs.photos = msg.clone(),
             _ => self.msgs.scan = msg.clone(),
         }
         msg
@@ -706,18 +782,61 @@ impl Engine {
         if self.cloud.is_empty() {
             return "nothing to export yet".to_string();
         }
-        let res = fs::File::create(path).and_then(|f| {
-            let mut w = BufWriter::new(f);
-            // Z up over the board: OpenCV's board +Z points away from the camera, so
-            // in the board frame objects sit at -Z and viewers show them upside down
-            let n = self.cloud.write_ply_in(&mut w, &FaceOutFrame::cornered(self.cfg.board.height_mm()))?;
-            w.flush()?;
-            Ok(n)
-        });
-        match res {
+        match self.write_scan_ply(Path::new(path)) {
             Ok(n) => format!("exported {n} pts -> {path}"),
             Err(e) => format!("export failed: {e}"),
         }
+    }
+
+    /// The cloud as a Z-up PLY over the board, through a temporary file so a
+    /// reader never finds half of one.
+    fn write_scan_ply(&self, path: &Path) -> std::io::Result<usize> {
+        let tmp = path.with_extension("ply.tmp");
+        let mut w = BufWriter::new(fs::File::create(&tmp)?);
+        // Z up over the board: OpenCV's board +Z points away from the camera, so
+        // in the board frame objects sit at -Z and viewers show them upside down
+        let n = self.cloud.write_ply_in(&mut w, &FaceOutFrame::cornered(self.cfg.board.height_mm()))?;
+        w.flush()?;
+        drop(w);
+        fs::rename(&tmp, path)?;
+        Ok(n)
+    }
+
+    /// Write the cloud into the open session (`laser.ply` for orbiter-recon,
+    /// `scan.ply` Z up) when it has points the session lacks, so leaving the
+    /// screen or a killed process loses nothing. Returns a note for the status line.
+    fn checkpoint(&mut self) -> String {
+        if self.photos.is_none() || self.cloud.is_empty() {
+            return String::new();
+        }
+        if !self.cloud_unsaved {
+            return ", saved".to_string();
+        }
+        match self.write_session_clouds() {
+            Ok(_) => ", saved".to_string(),
+            Err(e) => format!(", NOT saved: {e}"),
+        }
+    }
+
+    fn write_session_clouds(&mut self) -> std::io::Result<usize> {
+        let Some(s) = &self.photos else { return Ok(0) };
+        let n = s.write_laser(&self.cloud)?.unwrap_or(0);
+        self.write_scan_ply(&s.dir().join(SESSION_SCAN_PLY))?;
+        self.cloud_unsaved = false;
+        Ok(n)
+    }
+
+    /// No more photos in the open session; it carries on with the scan alone.
+    fn stop_photos_keep_session(&mut self, why: &str) -> String {
+        for st in self.stills.drain(..) {
+            let _ = fs::remove_file(&st.file);
+        }
+        self.photos_enabled = false;
+        self.trigger.reset();
+        self.photo_state = photo_state::NO_PHOTOS;
+        self.events |= ev::MESSAGES;
+        self.msgs.photos = format!("photos off ({why}) — the scan carries on and is kept");
+        self.msgs.photos.clone()
     }
 
     // ── photo keyframes ──────────────────────────────────────────────────────
@@ -752,11 +871,19 @@ impl Engine {
         match PhotoSession::open(a.dir, info) {
             Ok(s) => {
                 let msg = format!(
-                    "photos on -> {}{}",
+                    "photos on -> {}{}{}",
                     s.dir().display(),
+                    if a.photos { "" } else { " (scan only, no photos)" },
                     if self.k_file.is_none() { " (camera NOT calibrated)" } else { "" }
                 );
+                if a.fresh && !self.cloud_unsaved {
+                    self.cloud.clear();
+                    self.preview.clear();
+                }
+                // whatever the cloud holds now is not in this session yet
+                self.cloud_unsaved = !self.cloud.is_empty();
                 self.photos = Some(s);
+                self.photos_enabled = a.photos;
                 self.photo_serial = a.serial;
                 self.trigger.reset();
                 self.stills.clear();
@@ -769,23 +896,33 @@ impl Engine {
     /// Close the photo session: stills still in flight are dropped, the laser
     /// cloud goes into `laser.ply`.
     fn close_photos(&mut self, why: &str) -> String {
-        let Some(s) = self.photos.take() else { return "photos are off".to_string() };
+        if self.photos.is_none() {
+            return "photos are off".to_string();
+        }
+        // the scan belongs to its session: no session, no scanning
+        self.scan_on = false;
         for st in self.stills.drain(..) {
             let _ = fs::remove_file(&st.file);
         }
         self.photo_state = photo_state::OFF;
         self.events |= ev::MESSAGES;
-        if s.count() == 0 {
+        let laser = if self.cloud.is_empty() {
+            "no laser cloud (orbiter-recon needs laser.ply)".to_string()
+        } else if !self.cloud_unsaved {
+            format!("laser.ply + {SESSION_SCAN_PLY} {} pts", self.cloud.len())
+        } else {
+            match self.write_session_clouds() {
+                Ok(n) => format!("laser.ply + {SESSION_SCAN_PLY} {n} pts"),
+                Err(e) => format!("the cloud was NOT written: {e}"),
+            }
+        };
+        let s = self.photos.take().expect("checked above");
+        if s.count() == 0 && self.cloud.is_empty() {
             // nothing taken: leave no session behind
             remove_empty_session(&s.dir().join("photos"));
-            self.msgs.photos = format!("photos {why}: none taken");
+            self.msgs.photos = format!("photos {why}: nothing taken");
             return self.msgs.photos.clone();
         }
-        let laser = match s.write_laser(&self.cloud) {
-            Ok(Some(n)) => format!("laser.ply {n} pts"),
-            Ok(None) => "no laser cloud (orbiter-recon needs laser.ply)".to_string(),
-            Err(e) => format!("laser.ply NOT written: {e}"),
-        };
         self.msgs.photos = format!("photos {why}: {} in {} | {laser}", s.count(), s.dir().display());
         self.msgs.photos.clone()
     }
@@ -814,8 +951,8 @@ impl Engine {
         self.msgs.photos = msg.to_string();
         self.events |= ev::MESSAGES;
         if self.trigger.failures() >= MAX_PHOTO_FAILURES {
-            let why = format!("closed after {MAX_PHOTO_FAILURES} failed photos ({msg})");
-            self.close_photos(&why);
+            // the cause repeats (disk, camera): stop the photos, never the scan
+            self.stop_photos_keep_session(&format!("{MAX_PHOTO_FAILURES} failed in a row: {msg}"));
         }
     }
 
@@ -869,6 +1006,10 @@ impl Engine {
             self.photo_state = photo_state::OFF;
             return;
         }
+        if !self.photos_enabled {
+            self.photo_state = photo_state::NO_PHOTOS;
+            return;
+        }
         self.resolve_stills();
         self.photo_state = match self.trigger.check(&self.cfg.keyframes, &self.track) {
             Due::Now => {
@@ -910,7 +1051,12 @@ impl Engine {
             "scan": self.msgs.scan,
             "photos": self.msgs.photos,
             "intrinsics": format!("{intr}{focus_note}"),
-            "plane_file": self.plane.map(|_| "laser plane loaded").unwrap_or("no laser plane"),
+            "k_focus": self.k_file.as_ref().and_then(|f| f.focus_diopters),
+            "plane_file": match (self.plane, self.usable_plane()) {
+                (None, _) => "no laser plane",
+                (Some(_), None) => "laser plane fitted with another camera calibration",
+                (Some(_), Some(_)) => "laser plane loaded",
+            },
         })
         .to_string()
     }

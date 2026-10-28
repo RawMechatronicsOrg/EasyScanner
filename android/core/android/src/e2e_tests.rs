@@ -267,7 +267,8 @@ fn laser_plane_calibration_recovers_the_plane_and_scan_classifies() {
         }
     }
     assert!(saved, "plane never saved: {}", e.messages());
-    let (n, d) = config::load_plane(&dir, "test").unwrap();
+    let config::SavedPlane { n, d, k: plane_k } = config::load_plane(&dir, "test").unwrap();
+    assert!(plane_k.is_some(), "the plane is saved with the camera model it was fitted with");
     let ang = dot(n, n_true).abs().min(1.0).acos().to_degrees();
     eprintln!("plane: angle err {ang:.3} deg, d {d:.2} vs {d_true:.2}");
     assert!(ang < 0.5, "normal off by {ang} deg");
@@ -414,7 +415,7 @@ fn photo_keyframes_carry_the_pose_of_their_exposure() {
 }
 
 #[test]
-fn failing_photos_close_the_session_and_leave_nothing() {
+fn failing_photos_stop_the_photos_not_the_session() {
     let k = truth_k();
     let (mut e, dir) = engine("photo_fail", k);
     // a directory that already holds a session is never written into
@@ -434,12 +435,17 @@ fn failing_photos_close_the_session_and_leave_nothing() {
     std::fs::write(dir.join("session2/photos/.pending_1.jpg"), b"\xff\xd8").unwrap();
     for i in 0..5 {
         let msg = e.command(cmd::PHOTO_FAILED, "still capture failed (reason 0)");
-        assert_eq!(msg.contains("closed after 5"), i == 4, "{i}: {msg}");
+        assert_eq!(msg.contains("photos off"), i == 4, "{i}: {msg}");
     }
+    // the session carries on without photos, so a scan in it is still kept
+    let out = step(&mut e, &r.render(&k, &pose(480.0, 0.3, -0.25, 0.2, [0.0, 0.0]), None));
+    assert_eq!(out[h::PHOTO_STATE] as f64, photo_state::NO_PHOTOS);
+    assert!(!dir.join("session2/photos/.pending_1.jpg").exists(), "stills in flight are dropped");
+    e.command(cmd::PHOTOS_STOP, "");
     let out = step(&mut e, &r.render(&k, &pose(480.0, 0.3, -0.25, 0.2, [0.0, 0.0]), None));
     assert_eq!(out[h::PHOTO_STATE] as f64, photo_state::OFF);
     assert_eq!(out[h::PHOTO_SERIAL], 8.0, "the app tells its own session's close by the serial");
-    assert!(!dir.join("session2").exists(), "an empty session is removed");
+    assert!(!dir.join("session2").exists(), "a session that caught nothing is removed");
 }
 
 #[test]

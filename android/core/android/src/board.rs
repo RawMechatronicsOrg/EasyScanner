@@ -135,6 +135,12 @@ impl BoardTracker {
         Ok(())
     }
 
+    /// ArUco markers of the current frame: many markers but no corners means
+    /// the board settings do not match the printed board.
+    pub fn n_markers(&self) -> usize {
+        self.marker_ids.len()
+    }
+
     /// Board→camera pose from the current detection.
     pub fn solve_pose(&mut self, k: &Intrinsics) -> opencv::Result<Option<PoseResult>> {
         if self.corners.len() < 4 {

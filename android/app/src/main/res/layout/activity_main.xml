@@ -57,6 +57,22 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/previewFrame">
 
+        <!-- the guided steps (filled in code); the mode toggle replaces them in expert mode -->
+        <LinearLayout
+            android:id="@+id/steps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+
+        <TextView
+            android:id="@+id/stepTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="8dp"
+            android:textColor="#FAFAFA"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
         <com.google.android.material.button.MaterialButtonToggleGroup
             android:id="@+id/modes"
             android:layout_width="match_parent"

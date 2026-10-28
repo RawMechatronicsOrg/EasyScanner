@@ -255,6 +255,12 @@ impl Trigger {
         self.pending_since.is_some()
     }
 
+    /// Forget a requested still: it will not come back (the camera closed),
+    /// and a restarted sensor clock would hold the next one forever.
+    pub fn clear_pending(&mut self) {
+        self.pending_since = None;
+    }
+
     /// Stills that failed in a row since the last one that was taken.
     pub fn failures(&self) -> u32 {
         self.failures
