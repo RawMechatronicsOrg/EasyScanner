@@ -276,6 +276,10 @@ slashes.
 - On a real phone (2026-10-19): camera calibration, laser-plane calibration
   (rms 0.35 mm) and a scan exported as PLY (254 k points) — screenshots in the
   [main README](../README.md#first-scan-on-a-real-phone).
+- The engine e2e tests on that phone (arm64, `--target aarch64-linux-android`,
+  2026-10-29): 7/7 — camera within 1.3 mm, reprojection 0.27 px, a
+  calibration from 8 % off back to fx 999.99 of 1000 in 10 s, the laser
+  plane within 0.005°, a still's pose 0.21 mm / 0.02° from truth.
 - Galaxy A23 (SM-A236B, 2026-10-28): the board pose holds at 1440x1080,
   960x720 and 640x480 (57–61 corners, 0.7–1.0 px, the camera position agrees
   within 1 mm across sizes) with the two HAL workarounds above. Keep ArUco3

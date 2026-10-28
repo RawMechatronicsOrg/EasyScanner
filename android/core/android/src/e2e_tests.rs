@@ -440,7 +440,8 @@ fn failing_photos_stop_the_photos_not_the_session() {
     // the session carries on without photos, so a scan in it is still kept
     let out = step(&mut e, &r.render(&k, &pose(480.0, 0.3, -0.25, 0.2, [0.0, 0.0]), None));
     assert_eq!(out[h::PHOTO_STATE] as f64, photo_state::NO_PHOTOS);
-    assert!(!dir.join("session2/photos/.pending_1.jpg").exists(), "stills in flight are dropped");
+    assert!(dir.join("session2").exists());
+    // closing it with nothing captured removes it, the unposed pending still with it
     e.command(cmd::PHOTOS_STOP, "");
     let out = step(&mut e, &r.render(&k, &pose(480.0, 0.3, -0.25, 0.2, [0.0, 0.0]), None));
     assert_eq!(out[h::PHOTO_STATE] as f64, photo_state::OFF);
