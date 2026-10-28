@@ -385,6 +385,12 @@ impl FaceOutFrame {
         FaceOutFrame { origin: [board_w_mm / 2.0, board_h_mm / 2.0, 0.0] }
     }
 
+    /// Origin at the board's corner: the board covers [0, W] × [0, H] and the
+    /// object stands on +Z over it (the exported scans' frame).
+    pub fn cornered(board_h_mm: f64) -> Self {
+        FaceOutFrame { origin: [0.0, board_h_mm, 0.0] }
+    }
+
     /// An OpenCV board point in this frame.
     pub fn point(&self, p: V3) -> V3 {
         [p[0] - self.origin[0], self.origin[1] - p[1], self.origin[2] - p[2]]

@@ -26,7 +26,10 @@
     <string name="hint_view">Point the phone at the ChArUco board: the overlay shows the pose and its error.</string>
     <string name="hint_camera">Calibrate the camera: Start, then move and tilt the board slowly through the frame until SAVED.</string>
     <string name="hint_laser">Calibrate the laser plane: Start, then sweep the stripe across the board at varied tilts.</string>
-    <string name="hint_scan">Scan: Start, sweep the laser over the object; Export writes a PLY in the board frame (mm). Photos takes posed full-resolution keyframes into an orbiter-native session (long press: one now); stopping it adds laser.ply.</string>
+    <string name="hint_scan">Scan: Start, sweep the laser over the object; Export writes a Z-up PLY over the board (mm) to Download/EasyScanner and offers to share it. Photos takes posed full-resolution keyframes into an orbiter-native session (long press: one now); stopping it adds laser.ply.</string>
+    <string name="share_scan">Share scan</string>
+    <string name="scan_saved">Saved to Download/%1$s</string>
+    <string name="scan_copy_failed">Could not copy the scan to Downloads; it stays in the app\'s files.</string>
     <string name="photos_unavailable">This camera offers no photo size with the analysis aspect.</string>
 
     <string name="need_camera">Camera permission is required.</string>

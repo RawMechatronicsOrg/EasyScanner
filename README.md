@@ -14,13 +14,15 @@ app and printable parts — so other people can build something similar without
 re-deriving everything from scratch. Adapt it to whatever phone, laser and
 profile you have on the shelf.
 
-**Status**: the app is verified end to end on the emulator (engine
-end-to-end tests: camera position within 0.07–1.3 mm at ~500 mm, laser plane
-within 0.005°); testing on a real phone is in progress. The parts are being
-printed and assembled; the complete scanner has not been debugged as a whole
-yet. v0.2 adds the [assembly](cad/assembly/README.md) (STEP, FreeCAD, glTF),
-the flange clip for the laser mount and printable [ChArUco boards](#charuco-boards)
-from A4 to A0 with their generator.
+**Status**: the app scans on a real phone — camera calibration, laser-plane
+calibration and a hand-held scan exported as PLY ([first scan](#first-scan-on-a-real-phone)).
+On the emulator the engine's end-to-end tests put the camera within
+0.07–1.3 mm at ~500 mm and the laser plane within 0.005°; the accuracy of
+real scans has not been measured yet. v0.2 adds a ready
+[APK](https://github.com/RawMechatronicsOrg/EasyScanner/releases), the
+[assembly](cad/assembly/README.md) (STEP, FreeCAD, glTF), the flange clip for
+the laser mount, printable [ChArUco boards](#charuco-boards) from A4 to A0
+with their generator, and Z-up PLY exports shared straight from the phone.
 
 ## Required setup
 
@@ -58,8 +60,11 @@ What you need:
 2. **Assemble**: clamp the phone and the laser mount onto the profile, put
    the laser into the ring, tilt the ball so the stripe crosses the camera's
    view, tighten the nut.
-3. **Build and install the app** ([android/README.md](android/README.md) →
-   Toolchain):
+3. **Install the app**: download `easyscanner-<version>.apk` from
+   [Releases](https://github.com/RawMechatronicsOrg/EasyScanner/releases) and
+   open it on the phone (allow installing from this source), or
+   `adb install easyscanner-<version>.apk`. To build it yourself
+   ([android/README.md](android/README.md) → Toolchain):
    ```powershell
    cd android
    .\gradlew assembleDebug
@@ -72,8 +77,25 @@ What you need:
 6. **Calibrate the laser plane** (Laser mode): Start, then sweep the stripe
    across the board at varied tilts.
 7. **Scan** (Scan mode): put the object on the board, Start and sweep the
-   laser over it; Export writes a binary PLY in the board frame. **Photos ▶**
-   adds posed keyframes to an Orbiter photo session for `orbiter-recon`.
+   laser over it; Export writes a binary PLY (mm, Z up, the object standing
+   over the board), copies it to `Download/EasyScanner` and opens the share
+   sheet. **Photos ▶** adds posed keyframes to an Orbiter photo session for
+   `orbiter-recon`.
+
+## First scan on a real phone
+
+2026-10-19, from the phone's screen recording: calibrating the camera (64
+views of the board), the laser plane (rms 0.35 mm), scanning a plastic part
+and exporting the cloud — 254 219 points.
+
+| Camera calibration | Laser plane | Scanning | Export |
+|---|---|---|---|
+| ![Camera calibration on the phone](docs/images/phone_camera_calibration.jpg) | ![Laser plane calibration, rms 0.35 mm](docs/images/phone_laser_plane.jpg) | ![Scanning: the laser stripe and the growing cloud](docs/images/phone_scanning.jpg) | ![Exported 254219 points](docs/images/phone_exported.jpg) |
+
+![The exported cloud of that scan](docs/images/first_scan_cloud.jpg)
+
+The recording predates the rename, so the screens still say HandScanner and
+export in the old board frame.
 
 ## ChArUco boards
 

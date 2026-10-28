@@ -1,13 +1,17 @@
 package com.rawmechatronics.easyscanner
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
 import android.view.TextureView
 import android.view.View
@@ -416,9 +420,11 @@ class MainActivity : AppCompatActivity(), FrameProcessor.Listener {
                 1 -> {
                     val dir = File(getExternalFilesDir(null), "scans").apply { mkdirs() }
                     val name = "scan_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".ply"
-                    processor.command(Cmd.EXPORT_PLY, File(dir, name).absolutePath) { msg ->
+                    val file = File(dir, name)
+                    processor.command(Cmd.EXPORT_PLY, file.absolutePath) { msg ->
                         renderStatus()
                         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                        if (msg.startsWith("exported")) shareScan(file)   // engine.rs export_ply
                     }
                 }
                 2 -> processor.command(Cmd.CLOUD_CLEAR, done = show)
@@ -426,6 +432,43 @@ class MainActivity : AppCompatActivity(), FrameProcessor.Listener {
             }
         }
     }
+
+    /**
+     * Copy an exported scan to Download/EasyScanner (our own MediaStore entry needs no
+     * storage permission) and offer it to other apps; the original stays in the app's files.
+     */
+    private fun shareScan(file: File) = Thread {
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, file.name)
+            put(MediaStore.Downloads.MIME_TYPE, PLY_MIME)
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + DOWNLOADS_DIR)
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        var uri: Uri? = null
+        try {
+            uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IOException("MediaStore refused the entry")
+            contentResolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
+            contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+        } catch (e: Exception) {
+            Log.w(TAG, "copy to Downloads failed", e)
+            uri?.let { contentResolver.delete(it, null, null) }
+            uri = null
+        }
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            if (uri == null) {
+                Toast.makeText(this, getString(R.string.scan_copy_failed), Toast.LENGTH_LONG).show()
+                return@runOnUiThread
+            }
+            Toast.makeText(this, getString(R.string.scan_saved, "$DOWNLOADS_DIR/${file.name}"), Toast.LENGTH_LONG).show()
+            val send = Intent(Intent.ACTION_SEND)
+                .setType(PLY_MIME)
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(send, getString(R.string.share_scan)))
+        }
+    }.start()
 
     /**
      * Open a photo session (orbiter-native's layout) under the app's files and
@@ -493,5 +536,8 @@ class MainActivity : AppCompatActivity(), FrameProcessor.Listener {
     private companion object {
         const val TAG = "EasyScanner"
         const val HUD_PERIOD_MS = 100L
+        /** No registered PLY type; a generic one keeps MediaStore from renaming the file. */
+        const val PLY_MIME = "application/octet-stream"
+        const val DOWNLOADS_DIR = "EasyScanner"
     }
 }

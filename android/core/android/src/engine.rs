@@ -17,7 +17,7 @@ use opencv::core::{CV_8UC1, Mat};
 use scan_algo::cloud::PointCloud;
 use scan_algo::config::{self, Config, IntrinsicsFile};
 use scan_algo::focus::laplacian_variance;
-use scan_algo::geom::{Intrinsics, Pose, V3, euler_xyz_deg};
+use scan_algo::geom::{FaceOutFrame, Intrinsics, Pose, V3, euler_xyz_deg};
 use scan_algo::keyframe::{Due, Hold, Miss, PoseTrack, TrackedPose, Trigger};
 use scan_algo::laser::{LaserDetector, LaserParams, Roi, YuvFrame};
 use scan_algo::photo_session::{Cylinder, PhotoSession, SessionInfo};
@@ -708,7 +708,9 @@ impl Engine {
         }
         let res = fs::File::create(path).and_then(|f| {
             let mut w = BufWriter::new(f);
-            let n = self.cloud.write_ply(&mut w)?;
+            // Z up over the board: OpenCV's board +Z points away from the camera, so
+            // in the board frame objects sit at -Z and viewers show them upside down
+            let n = self.cloud.write_ply_in(&mut w, &FaceOutFrame::cornered(self.cfg.board.height_mm()))?;
             w.flush()?;
             Ok(n)
         });

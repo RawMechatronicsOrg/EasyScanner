@@ -97,11 +97,19 @@ Camera2 YUV_420_888 ──(direct ByteBuffers, no copy)──▶ nativeProcess
   `laser_plane.json` (plus `camera_id`); a file taken with another camera is
   ignored. Scans export to
   `/sdcard/Android/data/com.rawmechatronics.easyscanner/files/scans/scan_<time>.ply`
-  (binary PLY, XYZ mm in the board frame + RGB):
+  (binary PLY, XYZ mm + RGB, Z up: the board frame turned 180° about its X
+  axis and shifted by the board height, so the object stands on +Z over
+  [0, W] × [0, H]; OpenCV's own board +Z points into the board); a copy goes to
+  `Download/EasyScanner/` and the share sheet opens with it. The originals:
 
   ```
   adb pull /sdcard/Android/data/com.rawmechatronics.easyscanner/files/scans/
   ```
+
+  Or keep a computer in sync: [`tools/pull-scans.ps1`](tools/pull-scans.ps1)
+  copies new scans and photo sessions into `~\EasyScanner\{scans,sessions}`,
+  over USB or, after `adb tcpip 5555`, over Wi-Fi (`-Watch` repeats every
+  20 s). It never deletes anything on the phone.
 
 ## Photo keyframes → dense mesh and texture
 
@@ -239,6 +247,9 @@ slashes.
   0.02° from truth), orbiter-recon's `write_sparse` accepts a synthetic
   session (all 36 photos selected, laser seeds tracked); the still capture
   itself still needs a run on a real phone.
+- On a real phone (2026-10-19): camera calibration, laser-plane calibration
+  (rms 0.35 mm) and a scan exported as PLY (254 k points) — screenshots in the
+  [main README](../README.md#first-scan-on-a-real-phone).
 - Not ported: the off-frame virtual margin, PNG snapshots (use the phone's
   screenshot), the Orbiter `orbiter_state.json` lookup (board parameters live in
   Settings; the default is 8x8, 45 mm squares, 33.3 mm markers, DICT_5X5_100).

@@ -1,5 +1,6 @@
 //! The accumulated scan: XYZ (board frame, mm) + RGB, exportable as a binary
-//! little-endian PLY.
+//! little-endian PLY (exports use a Z-up frame over the board, see
+//! [`FaceOutFrame::cornered`]).
 
 use std::io::{self, Write};
 
@@ -120,6 +121,19 @@ mod tests {
         let body = &out[out.len() - PointCloud::BYTES_PER_POINT..];
         let f = |i: usize| f32::from_le_bytes(body[i..i + 4].try_into().unwrap());
         assert_eq!((f(0), f(4), f(8)), (-40.0, 10.0, 3.0));
+    }
+
+    #[test]
+    fn ply_in_the_cornered_frame_stands_on_the_board() {
+        let mut c = PointCloud::new(10);
+        c.push([1.0, 2.0, -3.0], [10, 20, 30]); // 3 mm above the board (camera side is -Z)
+        c.push([-1.5, 0.0, 9.25], [255, 0, 1]);
+        let mut out = Vec::new();
+        c.write_ply_in(&mut out, &FaceOutFrame::cornered(100.0)).unwrap();
+        let body = &out[out.len() - 2 * PointCloud::BYTES_PER_POINT..];
+        let f = |i: usize| f32::from_le_bytes(body[i..i + 4].try_into().unwrap());
+        assert_eq!((f(0), f(4), f(8)), (1.0, 98.0, 3.0)); // Z up, Y from the far edge
+        assert_eq!((f(15), f(19), f(23)), (-1.5, 100.0, -9.25));
     }
 
     #[test]
