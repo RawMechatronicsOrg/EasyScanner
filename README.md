@@ -85,7 +85,7 @@ What you need:
 ## First scan on a real phone
 
 2026-10-19, from the phone's screen recording: calibrating the camera (64
-views of the board), the laser plane (rms 0.35 mm), scanning a plastic part
+views of the board), the laser plane (rms 0.35 mm), scanning a phone
 and exporting the cloud — 254 219 points.
 
 | Camera calibration | Laser plane | Scanning | Export |
