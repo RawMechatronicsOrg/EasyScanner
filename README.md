@@ -95,6 +95,10 @@ What you need:
    was killed) is offered for copying on the next start. Settings → Expert
    mode brings back the four tool modes (View, Camera, Laser, Scan).
 
+   The gallery button next to Settings lists the scans on the phone: a tap
+   opens the cloud (drag to orbit, pinch to zoom, two fingers to pan, double
+   tap to frame it again) and the scan's photos, full screen on a tap.
+
 ## First scan on a real phone
 
 2026-10-19, from the phone's screen recording: calibrating the camera (64

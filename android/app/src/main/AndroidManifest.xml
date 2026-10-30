@@ -29,5 +29,23 @@
             android:label="@string/settings"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.EasyScanner.Settings" />
+
+        <activity
+            android:name=".LibraryActivity"
+            android:exported="false"
+            android:label="@string/library"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.EasyScanner.Settings" />
+
+        <activity
+            android:name=".ScanViewActivity"
+            android:exported="false"
+            android:parentActivityName=".LibraryActivity"
+            android:theme="@style/Theme.EasyScanner.Settings" />
+
+        <activity
+            android:name=".PhotoActivity"
+            android:exported="false"
+            android:theme="@style/Theme.EasyScanner" />
     </application>
 </manifest>

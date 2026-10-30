@@ -123,6 +123,7 @@ class MainActivity : AppCompatActivity(), FrameProcessor.Listener {
         settings = AppSettings.load(this)
 
         b.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
+        b.libraryButton.setOnClickListener { startActivity(Intent(this, LibraryActivity::class.java)) }
         b.modes.check(R.id.modeView)
         b.modes.addOnButtonCheckedListener { _, id, checked ->
             if (checked && expert) setMode(

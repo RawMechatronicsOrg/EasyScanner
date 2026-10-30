@@ -9,6 +9,7 @@ import androidx.preference.PreferenceFragmentCompat
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        padBelowBars(findViewById(android.R.id.content))
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction().replace(android.R.id.content, Fragment()).commit()
         }

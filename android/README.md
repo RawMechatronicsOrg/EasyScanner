@@ -128,6 +128,18 @@ Camera2 YUV_420_888 ──(direct ByteBuffers, no copy)──▶ nativeProcess
   over USB or, after `adb tcpip 5555`, over Wi-Fi (`-Watch` repeats every
   20 s). It never deletes anything on the phone.
 
+## Viewing scans on the phone
+
+The gallery button (top right, next to Settings) opens **Scans**: every session
+in `files/sessions/` and every expert-mode export in `files/scans/`, newest
+first, with its point count and photos. A scan opens on its cloud, OpenGL ES 2
+points in their own colours (`scan.ply`, else `laser.ply`; clouds over 1.5 M
+points are thinned by a stride): one finger orbits about the cloud's median,
+two fingers zoom and pan, a double tap frames it again. The session's photos
+sit under it; a tap shows one full screen, turned the way the preview showed
+it, and taps on the right or left third step through them. `PlyCloud.kt` reads
+any binary little-endian PLY, not only the engine's layout.
+
 ## Photo keyframes → dense mesh and texture
 
 Every guided scan runs in a session (expert mode: **Scan → Photos ▶**); with

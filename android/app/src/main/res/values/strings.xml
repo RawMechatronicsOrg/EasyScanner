@@ -105,4 +105,16 @@
     <string name="act_save_now">Copy to Download</string>
     <string name="act_later">Later</string>
     <string name="pending_saved">%1$d scan(s) copied to Download/EasyScanner</string>
+
+    <!-- the on-phone viewer: scans, their clouds and photos -->
+    <string name="library">Scans</string>
+    <string name="library_empty">No scans yet. A guided scan or an expert-mode export lands here.</string>
+    <string name="library_points">%1$,d points</string>
+    <string name="library_cloud">cloud</string>
+    <string name="cloud_none">No cloud in this scan</string>
+    <string name="cloud_loading">Loading the cloud…</string>
+    <string name="cloud_failed">Could not read the cloud: %1$s</string>
+    <string name="cloud_points_thinned">%1$,d points, showing %2$,d</string>
+    <string name="photo">Scan photo</string>
+    <string name="photo_counter">%1$d / %2$d  %3$s</string>
 </resources>
